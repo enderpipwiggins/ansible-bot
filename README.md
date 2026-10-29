@@ -10,9 +10,9 @@ Details:
 
 - Each person is welcomed **once per channel**. The list resets when the bot restarts, so restart it at the start of each stream.
 - Viewers who have never set a stream category are not welcomed.
-- The bot never welcomes itself, the channels it has joined, or common bots (StreamElements, Nightbot, Moobot, Fossabot). You can change the bot list.
+- The bot never welcomes itself, the channels it has joined, or common bots (StreamElements, Streamlabs, Nightbot, Moobot, Fossabot). You can change the bot list.
 - One bot can join several channels at once.
-- You can write your own welcome message.
+- You can write your own welcome message, or have the bot run a shoutout command you already use, such as `!so` (see [Using your own `!so` command](#using-your-own-so-command)).
 
 ---
 
@@ -240,8 +240,26 @@ All settings go in `.env`.
 | `CHANNELS` | ✅ | Comma-separated channels to join |
 | `TWITCH_CLIENT_ID` | ✅ | From the Twitch Developer Console |
 | `TWITCH_CLIENT_SECRET` | ✅ | From the Twitch Developer Console |
-| `SKIP_USERS` | | Comma-separated usernames to never welcome. Default: `streamelements,nightbot,moobot,fossabot`. The bot and joined channels are always skipped. |
-| `WELCOME_MESSAGE` | | Custom welcome text (see below) |
+| `SKIP_USERS` | | Comma-separated usernames to never welcome (see below) |
+| `WELCOME_MESSAGE` | | What the bot posts for a first-time streamer (see below) |
+
+### Skipping users
+
+`SKIP_USERS` lists accounts the bot should never welcome, usually other chat bots. If it is not set, the default is:
+
+```ini
+SKIP_USERS=streamelements,streamlabs,nightbot,moobot,fossabot
+```
+
+Setting `SKIP_USERS` **replaces** the default list rather than adding to it, so include any of the defaults you still want skipped. For example, to also skip a friend's bot:
+
+```ini
+SKIP_USERS=streamelements,streamlabs,nightbot,moobot,fossabot,friends_bot
+```
+
+The bot account (`BOT_USERNAME`) and the channels in `CHANNELS` are always skipped, whatever this is set to.
+
+Skipping matters most for chat bots that reply in your chat. Without it, a bot account that has a stream category set would get welcomed itself.
 
 ### Custom welcome message
 
@@ -259,6 +277,29 @@ Example:
 ```ini
 WELCOME_MESSAGE=Hey {displayName}! Go check them out, last seen streaming {game} → https://twitch.tv/{login}
 ```
+
+### Using your own `!so` command
+
+If you already have a shoutout command in Streamlabs, StreamElements or Nightbot, the bot can run it for you instead of writing its own message:
+
+```ini
+WELCOME_MESSAGE=!so {login}
+```
+
+When a streamer chats for the first time, the bot posts `!so theirname`, and your chat bot replies with the shoutout you set up. For example, a Streamlabs command like this:
+
+```
+!command add !so 📡 Incoming transmission on the ansible! Go check out ${1} — they were last seen playing ${game ${1}}: "${title ${1}}" → https://twitch.tv/${channel ${1}}
+```
+
+The bot still skips people with no stream category before sending `!so`, so regulars aren't shouted out.
+
+For this to work:
+
+1. **The bot account must be allowed to use the command.** If `BOT_USERNAME` is your own channel account, it already is. If it's a separate bot account, make it a mod (`/mod yourbotname`). Shoutout commands are usually limited to mods.
+2. **The chat bot that replies must be in `SKIP_USERS`.** Streamlabs, StreamElements and Nightbot are skipped by default. If you set `SKIP_USERS` yourself, keep the bot you use in the list. Otherwise its reply could get it shouted out.
+
+If your command has a different name (for example `!shoutout`), use that instead: `WELCOME_MESSAGE=!shoutout {login}`.
 
 ---
 

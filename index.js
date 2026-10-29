@@ -26,7 +26,7 @@ const WELCOME_MESSAGE =
 const SKIP = new Set([
   BOT_USERNAME,
   ...CHANNELS,
-  ...list(process.env.SKIP_USERS || 'streamelements,nightbot,moobot,fossabot'),
+  ...list(process.env.SKIP_USERS || 'streamelements,streamlabs,nightbot,moobot,fossabot'),
 ]);
 
 // Per-channel record of who has been welcomed. Resets when the bot restarts.
