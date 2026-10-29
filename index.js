@@ -75,12 +75,19 @@ let botRefreshToken = process.env.BOT_REFRESH_TOKEN || null;
 
 // True if the token works and has at least 10 minutes left.
 async function botTokenIsValid() {
-  const r = await fetch('https://id.twitch.tv/oauth2/validate', {
-    headers: { Authorization: `OAuth ${botToken}` },
-  });
-  if (!r.ok) return false;
-  const { expires_in } = await r.json();
-  return expires_in === 0 || expires_in > 600; // 0 = token never expires
+  try {
+    const r = await fetch('https://id.twitch.tv/oauth2/validate', {
+      headers: { Authorization: `OAuth ${botToken}` },
+    });
+    if (!r.ok) return false;
+    const { expires_in } = await r.json();
+    return expires_in === 0 || expires_in > 600; // 0 = token never expires
+  } catch (err) {
+    // Network problem, not a bad token. Throwing here would leave tmi.js stuck
+    // mid-reconnect, so keep the current token and let tmi.js retry as usual.
+    console.error('Token validation unreachable, using current token:', err.message);
+    return true;
+  }
 }
 
 async function refreshBotToken() {
@@ -117,12 +124,24 @@ function saveEnv(values) {
       ? text.replace(pattern, () => line)
       : `${text.replace(/\n?$/, '\n')}${line}\n`;
   }
-  fs.writeFileSync(ENV_PATH, text);
+  // Write a temp file and rename it over .env, so a crash mid-write can't wipe the secrets.
+  const tmpPath = `${ENV_PATH}.tmp`;
+  fs.writeFileSync(tmpPath, text, { mode: fs.statSync(ENV_PATH).mode });
+  fs.renameSync(tmpPath, ENV_PATH);
 }
+
+// Shared promise so the hourly check and a reconnect never refresh at the same time
+// (Twitch rotates the refresh token, so a second concurrent refresh would fail).
+let refreshing = null;
 
 // Called by tmi.js on every connect/reconnect.
 async function getBotPassword() {
-  if (botRefreshToken && !(await botTokenIsValid())) await refreshBotToken();
+  if (botRefreshToken && !(await botTokenIsValid())) {
+    refreshing ??= refreshBotToken().finally(() => {
+      refreshing = null;
+    });
+    await refreshing;
+  }
   return `oauth:${botToken}`;
 }
 
@@ -157,6 +176,8 @@ client.on('message', async (channel, tags, msg, self) => {
       })
     );
   } catch (err) {
+    // Forget them so their next message gets another try.
+    seenHere.delete(login);
     console.error(`Welcome for ${login} in ${channel} failed:`, err.message);
   }
 });

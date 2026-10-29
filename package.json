@@ -1,7 +1,7 @@
 {
   "name": "ansible-bot",
   "version": "1.0.0",
-  "description": "",
+  "description": "Twitch chat bot that welcomes fellow streamers",
   "main": "index.js",
   "scripts": {
     "start": "node --env-file=.env index.js",
