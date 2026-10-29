@@ -243,6 +243,25 @@ Leave the terminal open while you stream. Press **Ctrl+C** to stop the bot. Rest
 
 To test it, ask a friend who streams to say something in your chat.
 
+### Keep it running with pm2 (optional)
+
+If the bot can't get a chat token while reconnecting, it exits instead of sitting offline. This can happen after a network drop, or because the refresh token was revoked. A process manager such as [pm2](https://pm2.keymetrics.io) restarts it automatically:
+
+```sh
+npm install -g pm2
+pm2 start npm --name ansible-bot --exp-backoff-restart-delay=1000 -- start
+```
+
+`--exp-backoff-restart-delay` makes pm2 wait longer after each failed restart. A revoked token then can't cause a tight restart loop. Other useful commands:
+
+```sh
+pm2 logs ansible-bot     # watch the output
+pm2 restart ansible-bot  # restart (clears who has been welcomed)
+pm2 stop ansible-bot     # stop the bot
+```
+
+If the logs keep showing `Failed to refresh BOT_OAUTH`, the refresh token no longer works. Generate new tokens (see [`BOT_OAUTH`](#bot_oauth)).
+
 ---
 
 ## Configuration reference

@@ -136,13 +136,19 @@ let refreshing = null;
 
 // Called by tmi.js on every connect/reconnect.
 async function getBotPassword() {
-  if (botRefreshToken && !(await botTokenIsValid())) {
-    refreshing ??= refreshBotToken().finally(() => {
-      refreshing = null;
-    });
-    await refreshing;
+  try {
+    if (botRefreshToken && !(await botTokenIsValid())) {
+      refreshing ??= refreshBotToken().finally(() => {
+        refreshing = null;
+      });
+      await refreshing;
+    }
+    return `oauth:${botToken}`;
+  } catch (err) {
+    // Log here: tmi.js only reports "Could not get a token." and the bot exits right after.
+    console.error(err.message);
+    throw err;
   }
-  return `oauth:${botToken}`;
 }
 
 // ---- Chat client ----
@@ -160,12 +166,20 @@ client.on('message', async (channel, tags, msg, self) => {
   if (self || SKIP.has(login) || seenHere.has(login)) return;
   seenHere.add(login);
 
+  let ch;
   try {
     // /channels accepts broadcaster_id only, but the user id is already in the chat tags.
     const info = await helix(`channels?broadcaster_id=${tags['user-id']}`);
-    const ch = info.data?.[0];
-    if (!ch?.game_name) return; // never streamed / no category set
+    ch = info.data?.[0];
+  } catch (err) {
+    // Forget them so their next message gets another try.
+    seenHere.delete(login);
+    console.error(`Lookup for ${login} failed:`, err.message);
+    return;
+  }
+  if (!ch?.game_name) return; // never streamed / no category set
 
+  try {
     await client.say(
       channel,
       render(WELCOME_MESSAGE, {
@@ -176,14 +190,21 @@ client.on('message', async (channel, tags, msg, self) => {
       })
     );
   } catch (err) {
-    // Forget them so their next message gets another try.
-    seenHere.delete(login);
     console.error(`Welcome for ${login} in ${channel} failed:`, err.message);
   }
 });
 
 client.on('connected', () => {
   console.log(`Connected as ${BOT_USERNAME} to: ${CHANNELS.join(', ')}`);
+});
+
+// If getBotPassword() throws during a reconnect, tmi.js gives up without retrying.
+// Exit so a process manager (e.g. pm2) restarts the bot with a fresh connection.
+client.on('disconnected', (reason) => {
+  if (reason === 'Could not get a token.') {
+    console.error('Could not get a chat token; exiting so the process manager can restart.');
+    process.exit(1);
+  }
 });
 
 client.connect().catch((err) => {
