@@ -1,3 +1,5 @@
+const fs = require('node:fs');
+const path = require('node:path');
 const tmi = require('tmi.js');
 
 // ---- Config (see .env.example) ----
@@ -66,10 +68,68 @@ function render(template, vars) {
   return template.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match);
 }
 
+// ---- Chat token (user access token, refreshed with BOT_REFRESH_TOKEN) ----
+const ENV_PATH = path.join(__dirname, '.env');
+let botToken = BOT_OAUTH.replace(/^oauth:/, '');
+let botRefreshToken = process.env.BOT_REFRESH_TOKEN || null;
+
+// True if the token works and has at least 10 minutes left.
+async function botTokenIsValid() {
+  const r = await fetch('https://id.twitch.tv/oauth2/validate', {
+    headers: { Authorization: `OAuth ${botToken}` },
+  });
+  if (!r.ok) return false;
+  const { expires_in } = await r.json();
+  return expires_in === 0 || expires_in > 600; // 0 = token never expires
+}
+
+async function refreshBotToken() {
+  const r = await fetch('https://id.twitch.tv/oauth2/token', {
+    method: 'POST',
+    body: new URLSearchParams({
+      client_id: CLIENT_ID,
+      client_secret: CLIENT_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: botRefreshToken,
+    }),
+  });
+  if (!r.ok) {
+    throw new Error(
+      `Failed to refresh BOT_OAUTH: ${r.status} ${await r.text()}. ` +
+        'Generate a new token and refresh token (see README).'
+    );
+  }
+  const data = await r.json();
+  botToken = data.access_token;
+  botRefreshToken = data.refresh_token;
+  saveEnv({ BOT_OAUTH: `oauth:${botToken}`, BOT_REFRESH_TOKEN: botRefreshToken });
+  console.log('Refreshed BOT_OAUTH and saved it to .env');
+}
+
+// Rewrite (or append) KEY=value lines in .env so the next start uses the new tokens.
+function saveEnv(values) {
+  if (!fs.existsSync(ENV_PATH)) return;
+  let text = fs.readFileSync(ENV_PATH, 'utf8');
+  for (const [key, value] of Object.entries(values)) {
+    const line = `${key}=${value}`;
+    const pattern = new RegExp(`^${key}=.*$`, 'm');
+    text = pattern.test(text)
+      ? text.replace(pattern, () => line)
+      : `${text.replace(/\n?$/, '\n')}${line}\n`;
+  }
+  fs.writeFileSync(ENV_PATH, text);
+}
+
+// Called by tmi.js on every connect/reconnect.
+async function getBotPassword() {
+  if (botRefreshToken && !(await botTokenIsValid())) await refreshBotToken();
+  return `oauth:${botToken}`;
+}
+
 // ---- Chat client ----
 const client = new tmi.Client({
   options: { debug: false },
-  identity: { username: BOT_USERNAME, password: BOT_OAUTH },
+  identity: { username: BOT_USERNAME, password: getBotPassword },
   channels: CHANNELS,
 });
 
@@ -109,3 +169,10 @@ client.connect().catch((err) => {
   console.error('Failed to connect:', err);
   process.exit(1);
 });
+
+// Twitch asks apps to re-validate tokens hourly; this also keeps .env fresh on long streams.
+if (botRefreshToken) {
+  setInterval(() => {
+    getBotPassword().catch((err) => console.error(err.message));
+  }, 60 * 60 * 1000);
+}

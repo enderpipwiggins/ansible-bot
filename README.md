@@ -189,21 +189,37 @@ The most reliable way to get one is the official [Twitch CLI](https://dev.twitch
    twitch token -u -s "chat:read chat:edit"
    ```
 
-   A browser window opens and asks you to authorize the app. Approve it, and the terminal prints a **User Access Token**.
+   A browser window opens and asks you to authorize the app. Approve it, and the terminal prints a **User Access Token** and a **Refresh Token**.
 
-5. Put the token in `.env` with `oauth:` in front:
+5. Put both in `.env`. The access token needs `oauth:` in front; the refresh token does not:
 
    ```ini
    BOT_OAUTH=oauth:abc123yourtokenhere
+   BOT_REFRESH_TOKEN=xyz789yourrefreshtokenhere
    ```
 
-> User tokens expire. If the bot later fails to log in with an authentication error, repeat step 4 to get a new token. You can also run `twitch token --refresh <refresh-token>` with the refresh token printed in step 4.
+### `BOT_REFRESH_TOKEN` (optional, recommended)
+
+The chat token in `BOT_OAUTH` expires after a few hours. With `BOT_REFRESH_TOKEN` set, the bot renews it for you. On startup, on every reconnect, and once an hour while running, the bot checks whether `BOT_OAUTH` still works. If it is expired or about to expire, the bot uses the refresh token to get a new one.
+
+Each refresh gives a new `BOT_OAUTH` **and** a new `BOT_REFRESH_TOKEN`. The bot writes both back into your `.env` file, so you don't have to update anything. You'll see this message in the terminal when it happens:
+
+```
+Refreshed BOT_OAUTH and saved it to .env
+```
+
+Notes:
+
+- The refresh token only works with the app that created it. `TWITCH_CLIENT_ID` and `TWITCH_CLIENT_SECRET` must be the same ones you gave to `twitch configure`.
+- Refresh tokens stop working if the bot account's password changes or the app is disconnected under Twitch **Settings → Connections**. If that happens, the bot prints `Failed to refresh BOT_OAUTH`. Repeat steps 3–5 above to get a new pair.
+- If you leave `BOT_REFRESH_TOKEN` out, the bot uses `BOT_OAUTH` as it is. You will need to generate a new token by hand whenever it expires.
 
 ### Finished example
 
 ```ini
 BOT_USERNAME=mychannel_bot
 BOT_OAUTH=oauth:abc123yourtokenhere
+BOT_REFRESH_TOKEN=xyz789yourrefreshtokenhere
 CHANNELS=mychannel
 TWITCH_CLIENT_ID=a1b2c3d4e5f6g7h8i9j0
 TWITCH_CLIENT_SECRET=z9y8x7w6v5u4t3s2r1q0
@@ -237,6 +253,7 @@ All settings go in `.env`.
 | --- | --- | --- |
 | `BOT_USERNAME` | ✅ | Twitch account the bot chats as |
 | `BOT_OAUTH` | ✅ | Chat token for that account (`oauth:...`, scopes `chat:read chat:edit`) |
+| `BOT_REFRESH_TOKEN` | | Refresh token for `BOT_OAUTH`. When set, the bot renews the chat token automatically and saves both back into `.env`. |
 | `CHANNELS` | ✅ | Comma-separated channels to join |
 | `TWITCH_CLIENT_ID` | ✅ | From the Twitch Developer Console |
 | `TWITCH_CLIENT_SECRET` | ✅ | From the Twitch Developer Console |
@@ -312,7 +329,10 @@ That setting is missing or empty in `.env`. Make sure the file is named exactly 
 Your Node.js is older than 20.6. Upgrade it (see [step 1](#1-install-nodejs)).
 
 **`Login authentication failed`**
-`BOT_OAUTH` is wrong or has expired, or it was generated while signed in as a different account than `BOT_USERNAME`. Generate a new token (see [`BOT_OAUTH`](#bot_oauth)).
+`BOT_OAUTH` is wrong or has expired, or it was generated while signed in as a different account than `BOT_USERNAME`. Generate a new token (see [`BOT_OAUTH`](#bot_oauth)). Set [`BOT_REFRESH_TOKEN`](#bot_refresh_token-optional-recommended) as well, so expiry is handled automatically.
+
+**`Failed to refresh BOT_OAUTH: 400 ... Invalid refresh token`**
+The refresh token is wrong, has been revoked, or came from a different app than `TWITCH_CLIENT_ID`. Generate a new token and refresh token (see [`BOT_OAUTH`](#bot_oauth)) and put both in `.env`.
 
 **`Failed to get app token: 400` or `403`**
 `TWITCH_CLIENT_ID` or `TWITCH_CLIENT_SECRET` is wrong. Copy them again from the Developer Console.
