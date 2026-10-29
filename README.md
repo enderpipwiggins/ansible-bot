@@ -247,9 +247,11 @@ To test it, ask a friend who streams to say something in your chat.
 
 If the bot can't get a chat token while reconnecting, it exits instead of sitting offline. This can happen after a network drop, or because the refresh token was revoked. A process manager such as [pm2](https://pm2.keymetrics.io) restarts it automatically:
 
+Run these from the `ansible-bot` folder, so `.env` is found. They work on macOS, Linux and Windows:
+
 ```sh
 npm install -g pm2
-pm2 start npm --name ansible-bot --exp-backoff-restart-delay=1000 -- start
+pm2 start index.js --name ansible-bot --node-args="--env-file=.env" --exp-backoff-restart-delay=1000
 ```
 
 `--exp-backoff-restart-delay` makes pm2 wait longer after each failed restart. A revoked token then can't cause a tight restart loop. Other useful commands:
@@ -259,6 +261,15 @@ pm2 logs ansible-bot     # watch the output
 pm2 restart ansible-bot  # restart (clears who has been welcomed)
 pm2 stop ansible-bot     # stop the bot
 ```
+
+To start the bot automatically when your computer starts (macOS and Linux):
+
+```sh
+pm2 startup   # prints a command to run once; copy and run it
+pm2 save      # remembers the running bot so it comes back after a reboot
+```
+
+On Windows, `pm2 startup` isn't supported. Use a helper such as [pm2-installer](https://github.com/jessety/pm2-installer), or just run `pm2 start` again after rebooting.
 
 If the logs keep showing `Failed to refresh BOT_OAUTH`, the refresh token no longer works. Generate new tokens (see [`BOT_OAUTH`](#bot_oauth)).
 

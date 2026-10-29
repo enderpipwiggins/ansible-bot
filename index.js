@@ -215,6 +215,8 @@ client.connect().catch((err) => {
 // Twitch asks apps to re-validate tokens hourly; this also keeps .env fresh on long streams.
 if (botRefreshToken) {
   setInterval(() => {
-    getBotPassword().catch((err) => console.error(err.message));
+    // Already logged inside getBotPassword. Don't exit: the current session stays
+    // connected, and the next reconnect or hourly check tries again.
+    getBotPassword().catch(() => {});
   }, 60 * 60 * 1000);
 }
