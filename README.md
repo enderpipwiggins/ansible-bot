@@ -1,5 +1,7 @@
 # ansible-bot
 
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/H3V02A45DT)
+
 A small Twitch chat bot that welcomes fellow streamers to your channel.
 
 The first time someone chats during a session, the bot looks them up on Twitch. If they have a stream category set, it posts a welcome with the game they last streamed, their stream title, and a link to their channel:
